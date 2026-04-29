@@ -1,0 +1,407 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(VIEWER)
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  organizations Organization[] @relation("AssignedTo")
+  opportunities Opportunity[]  @relation("OpportunityOwner")
+  tasks         Task[]         @relation("TaskOwner")
+  newsItems     NewsItem[]     @relation("NewsAssignee")
+  interactions  Interaction[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Core Entities ──────────────────────────────────────────────────────────
+
+model Organization {
+  id          String           @id @default(cuid())
+  name        String
+  logo        String?
+  website     String?
+  country     String?
+  city        String?
+  lat         Float?
+  lng         Float?
+  type        OrganizationType @default(OTHER)
+  sector      String?
+  size        OrgSize?
+  description String?          @db.Text
+  status      CommercialStatus @default(PROSPECT)
+  priority    Priority         @default(MEDIUM)
+  source      String?
+  ownerId     String?
+  notes       String?          @db.Text
+  lastContact DateTime?
+  nextAction  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  owner         User?          @relation("AssignedTo", fields: [ownerId], references: [id])
+  contacts      Contact[]
+  opportunities Opportunity[]
+  interactions  Interaction[]
+  tags          OrgTag[]
+  presentations OrgPresentation[]
+  newsItems     OrgNewsItem[]
+
+  @@map("organizations")
+}
+
+model Contact {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  role           String?
+  email          String?
+  phone          String?
+  linkedin       String?
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("contacts")
+}
+
+model Opportunity {
+  id             String            @id @default(cuid())
+  name           String
+  organizationId String?
+  country        String?
+  city           String?
+  description    String?           @db.Text
+  value          Float?
+  probability    Int?
+  status         OpportunityStatus @default(IDENTIFIED)
+  closeDate      DateTime?
+  ownerId        String?
+  nextAction     String?
+  source         String?
+  notes          String?           @db.Text
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  owner        User?         @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  tasks        Task[]
+  interactions Interaction[]
+
+  @@map("opportunities")
+}
+
+model NewsItem {
+  id              String      @id @default(cuid())
+  title           String
+  source          String?
+  url             String?
+  publishedAt     DateTime?
+  summary         String?     @db.Text
+  country         String?
+  city            String?
+  sector          String?
+  relevance       Int?        @default(0)
+  opportunityType String?
+  nextAction      String?
+  status          NewsStatus  @default(UNREVIEWED)
+  assigneeId      String?
+  aiSummary       String?     @db.Text
+  aiTags          String[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  assignee      User?         @relation("NewsAssignee", fields: [assigneeId], references: [id])
+  tags          NewsTag[]
+  organizations OrgNewsItem[]
+
+  @@map("news_items")
+}
+
+model Presentation {
+  id             String             @id @default(cuid())
+  title          String
+  description    String?            @db.Text
+  fileUrl        String?
+  fileName       String?
+  targetType     OrganizationType?
+  sector         String?
+  region         String?
+  language       String?            @default("es")
+  services       String[]
+  version        String?            @default("1.0")
+  ownerId        String?
+  status         PresentationStatus @default(ACTIVE)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  tags          PresentationTag[]
+  organizations OrgPresentation[]
+
+  @@map("presentations")
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  title          String
+  description    String?    @db.Text
+  ownerId        String?
+  dueDate        DateTime?
+  priority       Priority   @default(MEDIUM)
+  status         TaskStatus @default(PENDING)
+  organizationId String?
+  opportunityId  String?
+  newsItemId     String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  owner        User?        @relation("TaskOwner", fields: [ownerId], references: [id])
+  opportunity  Opportunity? @relation(fields: [opportunityId], references: [id])
+
+  @@map("tasks")
+}
+
+model Interaction {
+  id             String          @id @default(cuid())
+  organizationId String?
+  opportunityId  String?
+  userId         String
+  type           InteractionType
+  notes          String?         @db.Text
+  date           DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  opportunity  Opportunity?  @relation(fields: [opportunityId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@map("interactions")
+}
+
+// ─── Tags (join tables) ─────────────────────────────────────────────────────
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  color String @default("#6366f1")
+
+  orgTags          OrgTag[]
+  presentationTags PresentationTag[]
+  newsTags         NewsTag[]
+
+  @@map("tags")
+}
+
+model OrgTag {
+  organizationId String
+  tagId          String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tag          Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, tagId])
+  @@map("org_tags")
+}
+
+model PresentationTag {
+  presentationId String
+  tagId          String
+
+  presentation Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  tag          Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([presentationId, tagId])
+  @@map("presentation_tags")
+}
+
+model NewsTag {
+  newsItemId String
+  tagId      String
+
+  newsItem NewsItem @relation(fields: [newsItemId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([newsItemId, tagId])
+  @@map("news_tags")
+}
+
+model OrgPresentation {
+  organizationId String
+  presentationId String
+  sentAt         DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  presentation Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, presentationId])
+  @@map("org_presentations")
+}
+
+model OrgNewsItem {
+  organizationId String
+  newsItemId     String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  newsItem     NewsItem     @relation(fields: [newsItemId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, newsItemId])
+  @@map("org_news_items")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  BUSINESS_DEVELOPMENT
+  PARTNER
+  VIEWER
+}
+
+enum OrganizationType {
+  GOVERNMENT
+  REAL_ESTATE_DEVELOPER
+  URBAN_DEVELOPER
+  INVESTMENT_FUND
+  INFRASTRUCTURE
+  ARCHITECTURE_PLANNING
+  TECHNOLOGY_PARTNER
+  ACADEMIC
+  MULTILATERAL
+  NGO_FOUNDATION
+  SMART_CITY
+  MOBILITY_TRANSPORT
+  CLIMATE_RESILIENCE
+  TOURISM_DESTINATION
+  HOUSING_URBAN
+  INNOVATION_DISTRICT
+  ECONOMIC_DEVELOPMENT
+  OTHER
+}
+
+enum OrgSize {
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum CommercialStatus {
+  PROSPECT
+  CONTACTED
+  MEETING_SCHEDULED
+  PROPOSAL_SENT
+  NEGOTIATION
+  ACTIVE_CLIENT
+  PAST_CLIENT
+  LOST
+  ON_HOLD
+  STRATEGIC_PARTNER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  STRATEGIC
+}
+
+enum OpportunityStatus {
+  IDENTIFIED
+  RESEARCH
+  INITIAL_CONTACT
+  MEETING
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+  ON_HOLD
+}
+
+enum NewsStatus {
+  UNREVIEWED
+  REVIEWED
+  SAVED
+  DISCARDED
+  CONVERTED
+}
+
+enum PresentationStatus {
+  DRAFT
+  ACTIVE
+  OBSOLETE
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum InteractionType {
+  EMAIL
+  CALL
+  MEETING
+  NOTE
+  PROPOSAL
+  OTHER
+}
