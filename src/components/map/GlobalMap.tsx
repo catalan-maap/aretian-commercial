@@ -1,16 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MOCK_ORGS } from "@/lib/data";
-import { TYPE_MAP_COLORS, STATUS_COLORS, cn } from "@/lib/utils";
-import { STATUS_LABELS, PRIORITY_LABELS, ORG_TYPE_LABELS } from "@/types";
-import { PRIORITY_COLORS } from "@/lib/utils";
-import { Organization } from "@/types";
-import { X, Globe, Building2, ArrowRight } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { TYPE_MAP_COLORS, cn } from "@/lib/utils";
+import { STATUS_LABELS, ORG_TYPE_LABELS } from "@/types";
+import { Globe } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
@@ -19,7 +15,6 @@ export function GlobalMap() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const [selected, setSelected] = useState<Organization | null>(null);
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -77,14 +72,41 @@ export function GlobalMap() {
         border: 2.5px solid white;
         box-shadow: 0 2px 6px rgba(0,0,0,0.25);
         cursor: pointer;
-        transition: transform 0.15s;
       `;
-      el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.5)"; });
-      el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
-      el.addEventListener("click", () => setSelected(org));
+
+      const popupHTML = `
+        <div style="font-family:system-ui,sans-serif;min-width:200px;padding:4px 2px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div style="width:32px;height:32px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-weight:700;color:#475569;font-size:14px;flex-shrink:0">
+              ${org.name.charAt(0)}
+            </div>
+            <div>
+              <div style="font-weight:600;font-size:13px;color:#0f172a">${org.name}</div>
+              <div style="font-size:11px;color:#94a3b8">${org.city ?? ""}, ${org.country ?? ""}</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:4px">
+            <span style="color:#94a3b8">Tipo:</span> ${ORG_TYPE_LABELS[org.type]}
+          </div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:10px">
+            <span style="color:#94a3b8">Estado:</span> ${STATUS_LABELS[org.status]}
+          </div>
+          <a href="/clients/${org.id}" style="display:block;text-align:center;background:#4f46e5;color:white;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:500;text-decoration:none">
+            Ver ficha →
+          </a>
+        </div>
+      `;
+
+      const popup = new mapboxgl.Popup({ offset: 14, closeButton: true, maxWidth: "260px" })
+        .setHTML(popupHTML);
+
+      el.addEventListener("click", () => {
+        popup.addTo(map);
+      });
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([org.lng, org.lat])
+        .setPopup(popup)
         .addTo(map);
 
       markersRef.current.push(marker);
@@ -153,15 +175,15 @@ export function GlobalMap() {
           </div>
           <div className="mt-4 grid gap-2 max-w-lg w-full px-8">
             {filteredOrgs.map((org) => (
-              <button
+              <a
                 key={org.id}
-                onClick={() => setSelected(org)}
+                href={`/clients/${org.id}`}
                 className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
               >
                 <div className="h-3 w-3 rounded-full flex-shrink-0" style={{ background: TYPE_MAP_COLORS[org.type] }} />
                 <span className="text-sm font-medium text-slate-800">{org.name}</span>
                 <span className="text-xs text-slate-400">{org.city}, {org.country}</span>
-              </button>
+              </a>
             ))}
           </div>
         </div>
@@ -169,62 +191,6 @@ export function GlobalMap() {
         <div ref={mapContainer} className="h-full w-full" />
       )}
 
-      {/* Popup panel */}
-      {selected && (
-        <div className="absolute right-4 top-4 z-20 w-80 rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="flex items-start justify-between p-4 pb-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-base font-bold text-slate-600">
-                {selected.name.charAt(0)}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">{selected.name}</p>
-                <p className="text-xs text-slate-400">{selected.city}, {selected.country}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setSelected(null)}
-              className="rounded-full p-1 hover:bg-slate-100 transition-colors"
-            >
-              <X className="h-4 w-4 text-slate-500" />
-            </button>
-          </div>
-
-          <div className="border-t border-slate-100 px-4 py-3 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">Tipo</span>
-              <span className="font-medium text-slate-700">{ORG_TYPE_LABELS[selected.type]}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">Estado</span>
-              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", STATUS_COLORS[selected.status])}>
-                {STATUS_LABELS[selected.status]}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">Prioridad</span>
-              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", PRIORITY_COLORS[selected.priority])}>
-                {PRIORITY_LABELS[selected.priority]}
-              </span>
-            </div>
-            {selected.nextAction && (
-              <div className="text-xs">
-                <span className="text-slate-400">Próxima acción</span>
-                <p className="mt-0.5 font-medium text-slate-700">{selected.nextAction}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-slate-100 p-3">
-            <Link href={`/clients/${selected.id}`}>
-              <Button variant="primary" size="sm" className="w-full gap-2">
-                Ver ficha completa
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
