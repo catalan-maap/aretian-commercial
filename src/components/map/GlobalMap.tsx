@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MOCK_ORGS } from "@/lib/data";
@@ -99,10 +99,6 @@ export function GlobalMap() {
 
       const popup = new mapboxgl.Popup({ offset: 14, closeButton: true, maxWidth: "260px" })
         .setHTML(popupHTML);
-
-      el.addEventListener("click", () => {
-        popup.addTo(map);
-      });
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([org.lng, org.lat])
